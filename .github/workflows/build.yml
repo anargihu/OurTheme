@@ -1,1 +1,58 @@
+name: Build OurTheme
 
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode Project
+        run: xcodegen generate
+
+      - name: Build OurTheme
+        run: |
+          xcodebuild \
+            -project OurTheme.xcodeproj \
+            -scheme OurTheme \
+            -sdk iphoneos \
+            -configuration Release \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+
+      - name: Package IPA
+        run: |
+          rm -rf Payload OurTheme-0.0.1.ipa
+          mkdir Payload
+          cp -R build/Build/Products/Release-iphoneos/OurTheme.app Payload/OurTheme.app
+          zip -r OurTheme-0.0.1.ipa Payload
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: OurTheme-0.0.1
+          path: OurTheme-0.0.1.ipa
+
+      - name: Publish Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete Test --yes || true
+          git push origin :refs/tags/Test || true
+          gh release create Test OurTheme-0.0.1.ipa \
+            --title "OurTheme 0.0.1" \
+            --notes "OurTheme 0.0.1 test build"
